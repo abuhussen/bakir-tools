@@ -3,7 +3,7 @@ name: Build and Release
 on:
   push:
     tags:
-      - "v*.*.*"
+      - 'v*.*.*'
 
 permissions:
   contents: write
@@ -15,15 +15,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: x86_64-unknown-linux-musl
-
-      - name: Install musl tools
-        run: sudo apt-get update && sudo apt-get install -y musl-tools
 
       - name: Format check
         working-directory: bakir-t-t
@@ -35,17 +30,21 @@ jobs:
 
       - name: Build release
         working-directory: bakir-t-t
-        run: cargo build --release --target x86_64-unknown-linux-musl
+        run: cargo build --release
 
       - name: Package
+        shell: bash
         run: |
           VERSION="${GITHUB_REF_NAME}"
-          mkdir -p "dist/bakir-t-t-${VERSION}-linux-x86_64"
-          cp "bakir-t-t/target/x86_64-unknown-linux-musl/release/bakir-t-t" \
-             "dist/bakir-t-t-${VERSION}-linux-x86_64/"
-          chmod +x "dist/bakir-t-t-${VERSION}-linux-x86_64/bakir-t-t"
+          PACKAGE="bakir-t-t-${VERSION}-linux-x86_64"
+          mkdir -p "dist/${PACKAGE}"
 
-          cat > "dist/bakir-t-t-${VERSION}-linux-x86_64/README.txt" <<'README'
+          cp "bakir-t-t/target/release/bakir-t-t" \
+             "dist/${PACKAGE}/bakir-t-t"
+
+          chmod +x "dist/${PACKAGE}/bakir-t-t"
+
+          cat > "dist/${PACKAGE}/README.txt" <<'README'
 BAKIR-T-T
 BAKIR Terminal Theme
 
@@ -61,23 +60,30 @@ Uninstall:
     ./bakir-t-t uninstall
 README
 
-          cd "dist/bakir-t-t-${VERSION}-linux-x86_64"
+          cd "dist/${PACKAGE}"
           sha256sum bakir-t-t > SHA256SUMS.txt
           cd ../..
+
           tar -czf \
-            "dist/bakir-t-t-${VERSION}-linux-x86_64.tar.gz" \
-            -C dist "bakir-t-t-${VERSION}-linux-x86_64"
+            "dist/${PACKAGE}.tar.gz" \
+            -C dist "${PACKAGE}"
 
       - name: Verify package
         run: |
-          tar -tzf "dist/bakir-t-t-${GITHUB_REF_NAME}-linux-x86_64.tar.gz"
-          test -x "bakir-t-t/target/x86_64-unknown-linux-musl/release/bakir-t-t"
+          VERSION="${GITHUB_REF_NAME}"
+          PACKAGE="bakir-t-t-${VERSION}-linux-x86_64"
+
+          test -f "dist/${PACKAGE}.tar.gz"
+          tar -tzf "dist/${PACKAGE}.tar.gz"
+          test -x "dist/${PACKAGE}/bakir-t-t"
 
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "${GITHUB_REF_NAME}" \
-            "dist/bakir-t-t-${GITHUB_REF_NAME}-linux-x86_64.tar.gz" \
-            --title "BAKIR-T-T ${GITHUB_REF_NAME}" \
+          VERSION="${GITHUB_REF_NAME}"
+
+          gh release create "${VERSION}" \
+            "dist/bakir-t-t-${VERSION}-linux-x86_64.tar.gz" \
+            --title "BAKIR-T-T ${VERSION}" \
             --generate-notes
