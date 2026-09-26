@@ -10,3 +10,6 @@ Thumbs.db
 # BAKIR backup files
 *.bak
 *.bak.*
+
+# Local release packages
+releases/
