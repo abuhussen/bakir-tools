@@ -1,0 +1,250 @@
+use std::env;
+use std::fs::OpenOptions;
+use std::io::Write;
+
+const START_MARKER: &str = "# >>> BAKIR TERMINAL THEME >>>";
+const END_MARKER: &str = "# <<< BAKIR TERMINAL THEME <<<";
+
+const THEME: &str = r#"
+# >>> BAKIR TERMINAL THEME >>>
+# BAKIR Premium Terminal Theme
+
+C_CYAN='\[\e[38;5;51m\]'
+C_MAGENTA='\[\e[38;5;201m\]'
+C_GOLD='\[\e[38;5;220m\]'
+C_RESET='\[\e[0m\]'
+
+PS1="${C_CYAN}┌──(${C_CYAN}\u${C_CYAN}) ${C_GOLD}» ${C_MAGENTA}B ${C_GOLD}« ${C_CYAN}(Bakir-Linux)${C_RESET}
+${C_CYAN}└─${C_GOLD}[${C_CYAN}\w${C_GOLD}] » ${C_CYAN}${C_RESET}"
+
+# <<< BAKIR TERMINAL THEME <<<
+"#;
+
+fn main() {
+    let args: Vec<String> = env::args().collect();
+
+    match args.get(1).map(String::as_str) {
+        Some("install") => install(),
+        Some("status") => status(),
+        Some("uninstall") => uninstall(),
+        _ => {
+            println!("BAKIR TERMINAL THEME");
+            println!("====================");
+            println!();
+            println!("Usage:");
+            println!("  bakir-t-t install");
+            println!("  bakir-t-t status");
+            println!("  bakir-t-t uninstall");
+        }
+    }
+}
+
+fn get_bashrc() -> Result<String, String> {
+    let home =
+        env::var("HOME").map_err(|_| "HOME environment variable was not found.".to_string())?;
+
+    Ok(format!("{home}/.bashrc"))
+}
+
+fn status() {
+    println!("BAKIR TERMINAL THEME");
+    println!("====================");
+    println!();
+
+    let user = env::var("USER").unwrap_or_else(|_| "unknown".to_string());
+
+    let bashrc = match get_bashrc() {
+        Ok(path) => path,
+        Err(error) => {
+            println!("✗ {error}");
+            return;
+        }
+    };
+
+    println!("User : {user}");
+    println!("Config: {bashrc}");
+
+    match std::fs::read_to_string(&bashrc) {
+        Ok(content) => {
+            println!("Bash : detected");
+            println!();
+
+            let installed = content.contains(START_MARKER) && content.contains(END_MARKER);
+
+            if installed {
+                println!("Theme : INSTALLED");
+            } else {
+                println!("Theme : NOT INSTALLED");
+            }
+        }
+
+        Err(error) => {
+            println!("Bash : detected");
+            println!();
+            println!("Theme : NOT INSTALLED");
+            println!("Reason: could not read .bashrc: {error}");
+        }
+    }
+
+    println!();
+    println!("No files were modified.");
+}
+
+fn create_backup(bashrc: &str) -> Result<String, String> {
+    let backup = format!("{bashrc}.bak");
+
+    if std::path::Path::new(&backup).exists() {
+        return Ok(backup);
+    }
+
+    std::fs::copy(bashrc, &backup).map_err(|error| format!("Could not create backup: {error}"))?;
+
+    Ok(backup)
+}
+
+fn install() {
+    println!("BAKIR TERMINAL THEME");
+    println!("====================");
+    println!();
+
+    let bashrc = match get_bashrc() {
+        Ok(path) => path,
+        Err(error) => {
+            println!("✗ {error}");
+            return;
+        }
+    };
+
+    let existing_content = match std::fs::read_to_string(&bashrc) {
+        Ok(content) => content,
+        Err(error) => {
+            println!("✗ Could not read {bashrc}");
+            println!("  Reason: {error}");
+            println!();
+            println!("No files were modified.");
+            return;
+        }
+    };
+
+    if existing_content.contains(START_MARKER) || existing_content.contains(END_MARKER) {
+        println!("Theme : ALREADY INSTALLED");
+        println!();
+        println!("No changes were made.");
+        return;
+    }
+
+    let backup = match create_backup(&bashrc) {
+        Ok(path) => path,
+        Err(error) => {
+            println!("✗ {error}");
+            println!("No files were modified.");
+            return;
+        }
+    };
+
+    let mut file = match OpenOptions::new().append(true).open(&bashrc) {
+        Ok(file) => file,
+        Err(error) => {
+            println!("✗ Could not open {bashrc} for writing.");
+            println!("  Reason: {error}");
+            println!();
+            println!("Your backup remains at:");
+            println!("  {backup}");
+            return;
+        }
+    };
+
+    let block = format!("\n{THEME}\n");
+
+    if let Err(error) = file.write_all(block.as_bytes()) {
+        println!("✗ Failed to install the theme.");
+        println!("  Reason: {error}");
+        println!();
+        println!("Your backup remains at:");
+        println!("  {backup}");
+        return;
+    }
+
+    println!("✓ BAKIR Terminal Theme installed.");
+    println!();
+    println!("Config: {bashrc}");
+    println!("Backup: {backup}");
+    println!();
+    println!("Run:");
+    println!("  source ~/.bashrc");
+}
+
+fn uninstall() {
+    println!("BAKIR TERMINAL THEME");
+    println!("====================");
+    println!();
+
+    let bashrc = match get_bashrc() {
+        Ok(path) => path,
+        Err(error) => {
+            println!("✗ {error}");
+            return;
+        }
+    };
+
+    let content = match std::fs::read_to_string(&bashrc) {
+        Ok(content) => content,
+        Err(error) => {
+            println!("✗ Could not read {bashrc}");
+            println!("  Reason: {error}");
+            println!("No files were modified.");
+            return;
+        }
+    };
+
+    let start = match content.find(START_MARKER) {
+        Some(position) => position,
+        None => {
+            println!("Theme : NOT INSTALLED");
+            println!();
+            println!("No changes were made.");
+            return;
+        }
+    };
+
+    let end_marker_position = match content[start..].find(END_MARKER) {
+        Some(position) => start + position,
+        None => {
+            println!("✗ Theme block is incomplete.");
+            println!("No files were modified.");
+            return;
+        }
+    };
+
+    let end = end_marker_position + END_MARKER.len();
+
+    let mut new_content = String::new();
+    new_content.push_str(&content[..start]);
+    new_content.push_str(&content[end..]);
+
+    let backup = match create_backup(&bashrc) {
+        Ok(path) => path,
+        Err(error) => {
+            println!("✗ {error}");
+            println!("No files were modified.");
+            return;
+        }
+    };
+
+    if let Err(error) = std::fs::write(&bashrc, new_content) {
+        println!("✗ Failed to remove the theme.");
+        println!("  Reason: {error}");
+        println!();
+        println!("Your backup remains at:");
+        println!("  {backup}");
+        return;
+    }
+
+    println!("✓ BAKIR Terminal Theme removed.");
+    println!();
+    println!("Config: {bashrc}");
+    println!("Backup: {backup}");
+    println!();
+    println!("Run:");
+    println!("  source ~/.bashrc");
+}
